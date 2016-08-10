@@ -1,0 +1,16 @@
+{
+  "name": "Sandbox",
+  "version": "1.0.0",
+  "description": "bla bla bla",
+  "repository": "aaaa",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "dotenv": "^2.0.0",
+    "phantom": "^2.1.14"
+  }
+}
