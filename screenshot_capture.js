@@ -1,66 +1,82 @@
 "use strict";
 
-var phantom = require('phantom');
+var Promise = require('promise');
+var path = require('path');
 
-function ScreenshotCapture(tasks) {
+/**
+ *
+ * @constructor
+ * @param {TasksCollection} tasks
+ * @param {Page} page
+ */
+function ScreenshotCapture(tasks, page) {
     this.tasks = tasks;
-    this.sitepage = null;
-    this.phInstance = null;
+    this.page = page;
     this.isProcessed = false;
     this.stepProcessed = false;
     this.format = process.env.FORMAT;
+    this.folder = process.env.SCREENSHOT_FOLDER;
+    this.screenWidth = process.env.SCREEN_WIDTH;
+    this.screenHeight = process.env.SCREEN_HEIGHT;
 }
 
-ScreenshotCapture.prototype.process = function() {
-    phantom.create()
-        .then(instance => {
-            this.phInstance = instance;
-            return instance.createPage();
-        })
-        .then(page => {
-            this.sitepage = page;
+ScreenshotCapture.prototype.initEvents = function () {
+    console.log('Events initialized');
+    this.page.property('viewportSize', { width: this.screenWidth, height: this.screenHeight });
+    this.page.on('onLoadStarted', () => {
+        this.isProcessed = true;
+        console.log("load started");
+    });
 
-            this.sitepage.property('viewportSize', {width: 1280, height: 768});
-            this.sitepage.on('onLoadStarted', () => {
-                this.isProcessed = true;
-                console.log("load started");
-            });
+    this.page.on('onLoadFinished', () => {
+        this.isProcessed = false;
+        console.log("load finished");
+    });
+};
 
-            this.sitepage.on('onLoadFinished', () => {
-                this.isProcessed = false;
-                console.log("load finished");
-            });
+/**
+ *
+ * @returns {Promise}
+ */
+ScreenshotCapture.prototype.process = function () {
+    console.log('Screenshot capture started');
+    this.initEvents();
 
-            return this.sitepage.open(process.env.BASE_URL);
-        }).then((status) => {
+    return new Promise((resolve) => {
+        console.log('Opening', process.env.BASE_URL);
 
-        console.time('all screenshots');
+        this.page.open(process.env.BASE_URL).then((status) => {
+            console.log("Page status: " + status);
+            console.time('all screenshots');
 
-        var interval = setInterval(() => {
-            if (!this.isProcessed && !this.stepProcessed) {
+            var interval = setInterval(() => {
+                if (!this.isProcessed && !this.stepProcessed) {
+                    var step = this.tasks.next();
+                    this.stepProcessed = true;
+                    if (!step) {
+                        console.log('Finished all steps');
+                        clearInterval(interval);
+                        console.timeEnd('all screenshots');
+                        resolve();
+                    } else {
+                        console.log(`Step ${this.tasks.step} started`);
+                        evaluate(this.page, step, process.env).then((filename) => {
+                            if (filename) {
+                                var pathAndFilename = path.join(__dirname, this.folder, `${filename}.${this.format}`);
+                                this.page.render(pathAndFilename);
+                                console.log('Saving into ' + pathAndFilename);
+                            }
+                            console.log(`Step ${this.tasks.step} finished and saved`);
+                            this.stepProcessed = false;
 
-                var step = this.tasks.next();
-                if (!step) {
-                    console.log('Finished all steps');
-                    clearInterval(interval);
-                    console.timeEnd('all screenshots');
-
-                    this.phInstance.exit();
-                } else {
-                    console.log(`Step ${this.tasks.step} started`);
-
-                    evaluate(this.sitepage, step, process.env).then((path) => {
-                        this.sitepage.render(__dirname + "/screens/" + path + '.' + this.format);
-                        console.log(`Step ${this.tasks.step} finished and saved`);
-                        this.stepProcessed = false;
-
-                        if (!step) {
-                            this.phInstance.exit();
-                        }
-                    });
+                            if (!step) {
+                                resolve();
+                            }
+                        });
+                    }
                 }
-            }
-        }, 100);
+            }, 1000);
+        });
     });
 };
 

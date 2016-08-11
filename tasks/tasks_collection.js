@@ -4,7 +4,7 @@ function TasksCollection() {
     this.suites = [];
     this.index = 0;
     this.step = 0;
-};
+}
 
 TasksCollection.prototype.add = function (suite) {
     this.suites.push(suite);
